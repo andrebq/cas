@@ -1,5 +1,7 @@
 .PHONY: dep install-dep test commit
 
+ci: test
+
 test: dep
 	go test -race .
 
