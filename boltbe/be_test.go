@@ -10,6 +10,7 @@ import (
 )
 
 func TestPutGet(t *testing.T) {
+	t.Parallel()
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)
