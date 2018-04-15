@@ -67,11 +67,11 @@ func TestGet(t *testing.T) {
 		}
 		actualContentType, actualContent, err := store.Get(test.out, k)
 		if err != test.expectedErr {
-			t.Fatal("Expecting error %v got %v", test.expectedErr, err)
+			t.Fatalf("Expecting error %v got %v", test.expectedErr, err)
 		} else if !reflect.DeepEqual(actualContent, test.content) {
-			t.Fatal("Expecing %v got %v for content", string(test.content), string(actualContent))
+			t.Fatalf("Expecing %v got %v for content", string(test.content), string(actualContent))
 		} else if !reflect.DeepEqual(actualContentType, test.contentType) {
-			t.Fatal("Expecing %v got %v for content-type", string(test.contentType), string(actualContentType))
+			t.Fatalf("Expecing %v got %v for content-type", string(test.contentType), string(actualContentType))
 		}
 	}
 }
