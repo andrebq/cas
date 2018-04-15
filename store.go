@@ -1,5 +1,3 @@
-//go:generate mockgen -destination ./mock_io/rwc.go io ReadWriteCloser
-//go:generate mockgen -destination ./mock_cas/kv.go -source store.go
 package cas
 
 import (
@@ -148,6 +146,52 @@ func (s *Store) Put(contentType, content []byte) ([]byte, error) {
 	return key, err
 }
 
+// Get searchs the storage for the key K, and write its content to out.
+// if out is too small, a new slice will be allocated.
+//
+// It returns the content-type, content or an error, both content-type or content
+// might be slices or out.
+//
+// If out is big enough for content-type but not for content, this method will
+// allocate memory only for content and will reuse out for content-type.
+func (s *Store) Get(out, k []byte) ([]byte, []byte, error) {
+	var hdr header
+	reader := s.kv.Get(k)
+	defer reader.Close()
+
+	err := hdr.ReadFrom(reader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var bufContentType []byte
+	var bufContent []byte
+
+	if len(out) >= hdr.typeLen {
+		bufContentType = out[0:hdr.typeLen]
+	} else {
+		bufContentType = make([]byte, hdr.typeLen)
+	}
+
+	if len(out) >= (hdr.typeLen + hdr.bodyLen) {
+		bufContent = out[hdr.typeLen : hdr.bodyLen+hdr.typeLen]
+	} else {
+		bufContent = make([]byte, hdr.bodyLen)
+	}
+
+	_, err = reader.Read(bufContentType)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	_, err = reader.Read(bufContent)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return bufContentType, bufContent, nil
+}
+
 func (s *Store) popHash() hash.Hash {
 	return s.pool.Get().(hash.Hash)
 }
@@ -175,6 +219,18 @@ func (h header) WriteTo(w io.Writer) (int64, error) {
 	binary.BigEndian.PutUint32(buf[1:], uint32(h.bodyLen))
 	sz, err := w.Write(buf[:])
 	return int64(sz), err
+}
+
+// ReadFrom reads header content from the given reader
+func (h *header) ReadFrom(r io.Reader) error {
+	var buf [5]byte
+	_, err := r.Read(buf[:])
+	if err != nil {
+		return err
+	}
+	h.typeLen = int(buf[0])
+	h.bodyLen = int(binary.BigEndian.Uint32(buf[1:]))
+	return nil
 }
 
 func (h header) totalSize() int {

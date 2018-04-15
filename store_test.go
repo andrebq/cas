@@ -4,16 +4,79 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/andrebq/cas"
+	"github.com/andrebq/cas/boltbe"
 	"github.com/andrebq/cas/mock_cas"
 	"github.com/andrebq/cas/mock_io"
 	"github.com/golang/mock/gomock"
 )
 
-func TestPutGet(t *testing.T) {
+func TestGet(t *testing.T) {
+	// using boltbe to simplify tests
+
+	tmpdir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpdir)
+
+	kv, err := boltbe.New(filepath.Join(tmpdir, "be"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := cas.NewStore(
+		cas.WithSHA1(),
+		cas.WithKV(kv))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type testEntry struct {
+		contentType []byte
+		content     []byte
+		expectedErr error
+		out         []byte
+	}
+
+	tests := []testEntry{
+		{
+			contentType: []byte("t"),
+			content:     []byte("hello"),
+			expectedErr: nil,
+			out:         nil,
+		},
+		{
+			contentType: []byte("t"),
+			content:     []byte("hello"),
+			expectedErr: nil,
+			out:         make([]byte, 6),
+		},
+	}
+
+	for _, test := range tests {
+		k, err := store.Put(test.contentType, test.content)
+		if err != nil {
+			t.Fatal(err)
+		}
+		actualContentType, actualContent, err := store.Get(test.out, k)
+		if err != test.expectedErr {
+			t.Fatal("Expecting error %v got %v", test.expectedErr, err)
+		} else if !reflect.DeepEqual(actualContent, test.content) {
+			t.Fatal("Expecing %v got %v for content", string(test.content), string(actualContent))
+		} else if !reflect.DeepEqual(actualContentType, test.contentType) {
+			t.Fatal("Expecing %v got %v for content-type", string(test.contentType), string(actualContentType))
+		}
+	}
+}
+
+func TestPut(t *testing.T) {
 	t.Parallel()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
